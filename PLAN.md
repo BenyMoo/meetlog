@@ -114,7 +114,7 @@ dart run build_runner build --delete-conflicting-outputs
 
 ---
 
-## 阶段三：数据访问层开发
+## ✅ 阶段三：数据访问层开发
 
 ### 3.1 LocalDbService 核心功能
 **初始化方法**:

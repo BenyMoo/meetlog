@@ -1,13 +1,10 @@
 import 'package:isar/isar.dart';
-import 'package:json_annotation/json_annotation.dart';
 
 part 'contact.g.dart';
 
 @collection
-@JsonSerializable()
 class Contact {
-  @Id()
-  int? id;
+  Id id = Isar.autoIncrement;
 
   final int recordId;
   final String name;
@@ -17,7 +14,7 @@ class Contact {
   final DateTime? followUpDate;
 
   Contact({
-    this.id,
+    this.id = Isar.autoIncrement,
     required this.recordId,
     required this.name,
     required this.platform,
@@ -26,7 +23,29 @@ class Contact {
     this.followUpDate,
   });
 
-  factory Contact.fromJson(Map<String, dynamic> json) => _$ContactFromJson(json);
+  factory Contact.fromJson(Map<String, dynamic> json) {
+    return Contact(
+      id: json['id'] as int? ?? Isar.autoIncrement,
+      recordId: json['recordId'] as int,
+      name: json['name'] as String,
+      platform: json['platform'] as String,
+      account: json['account'] as String,
+      impressionScore: json['impressionScore'] as int,
+      followUpDate: json['followUpDate'] != null
+          ? DateTime.parse(json['followUpDate'] as String)
+          : null,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$ContactToJson(this);
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'recordId': recordId,
+      'name': name,
+      'platform': platform,
+      'account': account,
+      'impressionScore': impressionScore,
+      'followUpDate': followUpDate?.toIso8601String(),
+    };
+  }
 }
