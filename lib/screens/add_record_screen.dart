@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../models/approach_record.dart';
 import '../models/contact.dart';
@@ -34,13 +35,13 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
 
   final List<String> _platforms = ['微信', 'QQ', '微博', '抖音', '小红书', '电话', 'Instagram'];
   final List<String> _failReasons = [
-    '太紧张',
+    '说话太紧张',
     '开场白生硬',
     '对方有伴侣',
     '直接被拒',
     '时机不对',
     '话题枯竭',
-    '表现不自然',
+    '肢体不自然',
     '对方赶时间',
     '其他'
   ];
@@ -152,9 +153,10 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
         SnackBar(
           content: Text(_isSuccess == true ? '记录成功！继续加油！' : '已记录，下次会更好！'),
           backgroundColor: _isSuccess == true ? Colors.green : Colors.orange,
+          duration: const Duration(milliseconds: 500),
         ),
       );
-      _resetForm();
+      context.go('/records');
     }
   }
 

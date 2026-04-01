@@ -8,17 +8,26 @@ import '../screens/contacts_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/add_record_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/launch_screen.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
-final _shellNavigatorKey = GlobalKey<NavigatorState>();
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+final shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
-    initialLocation: '/records',
+    navigatorKey: rootNavigatorKey,
+    initialLocation: '/launch',
     routes: [
+      GoRoute(
+        path: '/launch',
+        name: 'launch',
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: LaunchScreen(),
+        ),
+      ),
       ShellRoute(
-        navigatorKey: _shellNavigatorKey,
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => MainScreen(child: child),
         routes: [
           GoRoute(
@@ -47,7 +56,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/add-record',
         name: 'add-record',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         pageBuilder: (context, state) => const MaterialPage(
           child: AddRecordScreen(),
         ),
@@ -55,7 +64,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         name: 'settings',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         pageBuilder: (context, state) => const MaterialPage(
           child: SettingsScreen(),
         ),

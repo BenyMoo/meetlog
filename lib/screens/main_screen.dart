@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../routes/app_router.dart';
+
 final currentTabIndexProvider = StateProvider<int>((ref) => 0);
 
 class MainScreen extends ConsumerWidget {
@@ -19,7 +21,15 @@ class MainScreen extends ConsumerWidget {
         height: 44,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
         selectedIndex: currentIndex,
-        onDestinationSelected: (index) {
+        onDestinationSelected: (index) async {
+          final shellNavigator = shellNavigatorKey.currentState;
+          if (shellNavigator != null && await shellNavigator.maybePop()) {
+            return;
+          }
+          final rootNavigator = rootNavigatorKey.currentState;
+          if (rootNavigator != null && await rootNavigator.maybePop()) {
+            return;
+          }
           ref.read(currentTabIndexProvider.notifier).state = index;
           switch (index) {
             case 0:

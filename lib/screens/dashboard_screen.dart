@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../models/approach_record.dart';
 import '../providers/db_providers.dart';
+import '../providers/pro_provider.dart';
+import '../services/local_db_service.dart';
 
 enum TimeRange { week, month, all }
 
@@ -54,9 +56,111 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     context.push('/settings');
   }
 
+  Future<void> _showProRequiredDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pro 功能'),
+        content: const Text('导出功能仅限 Pro 版使用，请前往设置页激活。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.push('/settings');
+            },
+            child: const Text('去激活'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _rangeLabel() {
+    switch (_selectedRange) {
+      case TimeRange.week:
+        return '本周';
+      case TimeRange.month:
+        return '本月';
+      case TimeRange.all:
+        return '全部';
+    }
+  }
+
+  Future<void> _exportDashboardData(
+    BuildContext context,
+    List<ApproachRecord> filteredRecords,
+  ) async {
+    final dbService = ref.read(localDbServiceProvider);
+    final allContacts = await dbService.getAllContacts();
+    final filteredRecordIds = filteredRecords.map((record) => record.id).toSet();
+    final relatedContacts = allContacts
+        .where((contact) => filteredRecordIds.contains(contact.recordId))
+        .toList();
+
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+    final lines = <String>[
+      'MeetLog 复盘导出',
+      '范围：${_rangeLabel()}',
+      '导出时间：${dateFormat.format(DateTime.now())}',
+      '',
+      '搭讪记录',
+    ];
+
+    if (filteredRecords.isEmpty) {
+      lines.add('暂无记录');
+    } else {
+      for (final record in filteredRecords) {
+        final status = record.isSuccess ? '成功' : '失败';
+        final failReason = record.failReason?.isNotEmpty == true
+            ? '｜原因：${record.failReason}'
+            : '';
+        final reflection = record.reflection?.isNotEmpty == true
+            ? '｜复盘：${record.reflection}'
+            : '';
+        lines.add(
+          '${dateFormat.format(record.dateTime)}｜$status｜地点：${record.location}$failReason$reflection',
+        );
+      }
+    }
+
+    lines.add('');
+    lines.add('联系方式');
+    if (relatedContacts.isEmpty) {
+      lines.add('暂无联系方式');
+    } else {
+      for (final contact in relatedContacts) {
+        final followUp = contact.followUpDate != null
+            ? '｜跟进：${DateFormat('yyyy-MM-dd').format(contact.followUpDate!)}'
+            : '';
+        lines.add(
+          '${contact.name}｜${contact.platform}｜账号：${contact.account}｜印象分：${contact.impressionScore}$followUp',
+        );
+      }
+    }
+
+    final path = await dbService.exportTextFile(
+      fileName:
+          'meetlog_${_rangeLabel()}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.txt',
+      content: lines.join('\n'),
+    );
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(path == null ? '导出已取消' : '复盘数据已导出'),
+        duration: const Duration(milliseconds: 500),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final recordsAsync = ref.watch(recordsProvider);
+    final isProActivated = ref.watch(proActivatedProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -74,7 +178,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       body: recordsAsync.when(
         data: (allRecords) {
           final records = _filterRecordsByRange(allRecords);
-          return _buildContent(context, records);
+          return _buildContent(context, records, isProActivated);
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
@@ -84,7 +188,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildContent(BuildContext context, List<ApproachRecord> records) {
+  Widget _buildContent(
+    BuildContext context,
+    List<ApproachRecord> records,
+    bool isProActivated,
+  ) {
     final successCount = records.where((r) => r.isSuccess).length;
     final failCount = records.length - successCount;
     final failRecords = records.where((r) => !r.isSuccess).toList();
@@ -106,18 +214,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SegmentedButton<TimeRange>(
-            segments: const [
-              ButtonSegment(value: TimeRange.week, label: Text('本周')),
-              ButtonSegment(value: TimeRange.month, label: Text('本月')),
-              ButtonSegment(value: TimeRange.all, label: Text('全部')),
+          Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<TimeRange>(
+                  segments: const [
+                    ButtonSegment(value: TimeRange.week, label: Text('本周')),
+                    ButtonSegment(value: TimeRange.month, label: Text('本月')),
+                    ButtonSegment(value: TimeRange.all, label: Text('全部')),
+                  ],
+                  selected: {_selectedRange},
+                  onSelectionChanged: (Set<TimeRange> selection) {
+                    setState(() {
+                      _selectedRange = selection.first;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton(
+                onPressed: () {
+                  if (!isProActivated) {
+                    _showProRequiredDialog(context);
+                    return;
+                  }
+                  _exportDashboardData(context, records);
+                },
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(44, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Icon(Icons.ios_share_outlined, size: 18),
+              ),
             ],
-            selected: {_selectedRange},
-            onSelectionChanged: (Set<TimeRange> selection) {
-              setState(() {
-                _selectedRange = selection.first;
-              });
-            },
           ),
           const SizedBox(height: 24),
           _buildSummaryCard(context, records.length, successCount, failCount),

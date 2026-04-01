@@ -55,23 +55,33 @@ class LocalDbService {
 
   Future<List<ApproachRecord>> getAllRecords() async {
     final records = await isar.approachRecords.where().findAll();
-    final hasCustomOrder = records.any((r) => r.sortOrder > 0);
-    if (hasCustomOrder) {
-      records.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    } else {
-      records.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-    }
+    records.sort((a, b) {
+      final aPinned = a.sortOrder < 0;
+      final bPinned = b.sortOrder < 0;
+      if (aPinned != bPinned) {
+        return aPinned ? -1 : 1;
+      }
+      if (aPinned && bPinned) {
+        return a.sortOrder.compareTo(b.sortOrder);
+      }
+      return b.dateTime.compareTo(a.dateTime);
+    });
     return records;
   }
 
   Future<List<Contact>> getAllContacts() async {
     final contacts = await isar.contacts.where().findAll();
-    final hasCustomOrder = contacts.any((c) => c.sortOrder > 0);
-    if (hasCustomOrder) {
-      contacts.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    } else {
-      contacts.sort((a, b) => b.id.compareTo(a.id));
-    }
+    contacts.sort((a, b) {
+      final aPinned = a.sortOrder < 0;
+      final bPinned = b.sortOrder < 0;
+      if (aPinned != bPinned) {
+        return aPinned ? -1 : 1;
+      }
+      if (aPinned && bPinned) {
+        return a.sortOrder.compareTo(b.sortOrder);
+      }
+      return b.id.compareTo(a.id);
+    });
     return contacts;
   }
 
@@ -113,6 +123,86 @@ class LocalDbService {
           followUpDate: contact.followUpDate,
           createdAt: contact.createdAt,
           sortOrder: order,
+        );
+        await isar.contacts.put(updatedContact);
+      }
+    });
+  }
+
+  Future<void> pinRecord(int id) async {
+    await isar.writeTxn(() async {
+      final record = await isar.approachRecords.get(id);
+      if (record != null) {
+        final updatedRecord = ApproachRecord(
+          id: record.id,
+          dateTime: record.dateTime,
+          location: record.location,
+          isSuccess: record.isSuccess,
+          failReason: record.failReason,
+          reflection: record.reflection,
+          sortOrder: -DateTime.now().microsecondsSinceEpoch,
+        );
+        await isar.approachRecords.put(updatedRecord);
+      }
+    });
+  }
+
+  Future<void> unpinRecord(int id) async {
+    await isar.writeTxn(() async {
+      final record = await isar.approachRecords.get(id);
+      if (record != null) {
+        final updatedRecord = ApproachRecord(
+          id: record.id,
+          dateTime: record.dateTime,
+          location: record.location,
+          isSuccess: record.isSuccess,
+          failReason: record.failReason,
+          reflection: record.reflection,
+          sortOrder: 0,
+        );
+        await isar.approachRecords.put(updatedRecord);
+      }
+    });
+  }
+
+  Future<void> pinContact(int id) async {
+    await isar.writeTxn(() async {
+      final contact = await isar.contacts.get(id);
+      if (contact != null) {
+        final updatedContact = Contact(
+          id: contact.id,
+          recordId: contact.recordId,
+          name: contact.name,
+          platform: contact.platform,
+          account: contact.account,
+          impressionScore: contact.impressionScore,
+          impression: contact.impression,
+          hobby: contact.hobby,
+          followUpDate: contact.followUpDate,
+          createdAt: contact.createdAt,
+          sortOrder: -DateTime.now().microsecondsSinceEpoch,
+        );
+        await isar.contacts.put(updatedContact);
+      }
+    });
+  }
+
+  Future<void> unpinContact(int id) async {
+    await isar.writeTxn(() async {
+      final contact = await isar.contacts.get(id);
+      if (contact != null) {
+        final updatedContact = Contact(
+          id: contact.id,
+          recordId: contact.recordId,
+          name: contact.name,
+          platform: contact.platform,
+          account: contact.account,
+          impressionScore: contact.impressionScore,
+          impression: contact.impression,
+          hobby: contact.hobby,
+          followUpDate: contact.followUpDate,
+          createdAt: contact.createdAt,
+          sortOrder: 0,
         );
         await isar.contacts.put(updatedContact);
       }
@@ -225,6 +315,50 @@ class LocalDbService {
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/meetlog_backup.json');
       await file.writeAsString(jsonString);
+      outputPath = file.path;
+    }
+
+    return outputPath;
+  }
+
+  Future<String?> exportJsonFile({
+    required String fileName,
+    required Map<String, dynamic> data,
+  }) async {
+    final jsonString = const JsonEncoder.withIndent('  ').convert(data);
+
+    String? outputPath;
+    try {
+      outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: '导出数据',
+        fileName: fileName,
+        bytes: Uint8List.fromList(utf8.encode(jsonString)),
+      );
+    } catch (e) {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsString(jsonString);
+      outputPath = file.path;
+    }
+
+    return outputPath;
+  }
+
+  Future<String?> exportTextFile({
+    required String fileName,
+    required String content,
+  }) async {
+    String? outputPath;
+    try {
+      outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: '导出数据',
+        fileName: fileName,
+        bytes: Uint8List.fromList(utf8.encode(content)),
+      );
+    } catch (e) {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsString(content);
       outputPath = file.path;
     }
 

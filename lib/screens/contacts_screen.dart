@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../models/contact.dart';
 import '../providers/db_providers.dart';
+import '../providers/pro_provider.dart';
 import '../services/local_db_service.dart';
 
 class ContactsScreen extends ConsumerStatefulWidget {
@@ -17,8 +18,6 @@ class ContactsScreen extends ConsumerStatefulWidget {
 class _ContactsScreenState extends ConsumerState<ContactsScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _isReordering = false;
-  List<Contact> _contacts = [];
 
   @override
   void dispose() {
@@ -83,17 +82,10 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     }).toList();
   }
 
-  Future<void> _saveOrder() async {
-    final dbService = ref.read(localDbServiceProvider);
-    for (int i = 0; i < _contacts.length; i++) {
-      await dbService.updateContactOrder(_contacts[i].id, i);
-    }
-    ref.invalidate(contactsProvider);
-  }
-
   @override
   Widget build(BuildContext context) {
     final contactsAsync = ref.watch(contactsProvider);
+    final isProActivated = ref.watch(proActivatedProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -101,35 +93,6 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0,
-        actions: [
-          contactsAsync.when(
-            data: (contacts) {
-              if (contacts.length > 1 && _searchQuery.isEmpty) {
-                return TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _isReordering = !_isReordering;
-                      if (!_isReordering) {
-                        _saveOrder();
-                      }
-                    });
-                  },
-                  child: Text(
-                    _isReordering ? '完成' : '排序',
-                    style: TextStyle(
-                      color: _isReordering 
-                          ? Theme.of(context).colorScheme.primary 
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -140,9 +103,6 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               onChanged: (value) {
                 setState(() {
                   _searchQuery = value;
-                  if (value.isNotEmpty) {
-                    _isReordering = false;
-                  }
                 });
               },
               decoration: InputDecoration(
@@ -173,19 +133,19 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
           Expanded(
             child: contactsAsync.when(
               data: (contacts) {
-                if (!_isReordering || _contacts.isEmpty) {
-                  _contacts = List.from(contacts);
-                }
-                final filteredContacts = _filterContacts(_contacts);
+                final filteredContacts = _filterContacts(contacts);
                 if (filteredContacts.isEmpty) {
                   if (_searchQuery.isNotEmpty) {
                     return _SearchEmptyState(query: _searchQuery);
                   }
                   return const _ContactsEmptyState();
                 }
-                return _isReordering && _searchQuery.isEmpty
-                    ? _buildReorderableList(context, filteredContacts)
-                    : _buildContactsList(context, filteredContacts);
+                return _buildContactsList(
+                  context,
+                  filteredContacts,
+                  contacts,
+                  isProActivated: isProActivated,
+                );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, stack) => Center(
@@ -198,49 +158,46 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     );
   }
 
-  Widget _buildReorderableList(BuildContext context, List<Contact> contacts) {
-    return ReorderableListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-      itemCount: contacts.length,
-      onReorder: (oldIndex, newIndex) {
-        setState(() {
-          if (newIndex > oldIndex) {
-            newIndex -= 1;
-          }
-          final item = contacts.removeAt(oldIndex);
-          contacts.insert(newIndex, item);
-        });
-      },
-      itemBuilder: (context, index) {
-        final contact = contacts[index];
-        return Container(
-          key: ValueKey(contact.id),
-          margin: const EdgeInsets.only(bottom: 8),
-          child: _buildContactCard(context, contact, showOptions: false),
-        );
-      },
-    );
-  }
-
-  Widget _buildContactsList(BuildContext context, List<Contact> contacts) {
+  Widget _buildContactsList(
+    BuildContext context,
+    List<Contact> contacts,
+    List<Contact> allContacts,
+    {required bool isProActivated,}
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
       itemCount: contacts.length,
       itemBuilder: (context, index) {
         final contact = contacts[index];
-        return _buildContactCard(context, contact);
+        return _buildContactCard(
+          context,
+          contact,
+          allContacts: allContacts,
+          isProActivated: isProActivated,
+        );
       },
     );
   }
 
-  Widget _buildContactCard(BuildContext context, Contact contact, {bool showOptions = true}) {
+  Widget _buildContactCard(
+    BuildContext context,
+    Contact contact, {
+    required List<Contact> allContacts,
+    required bool isProActivated,
+  }) {
     final dateFormat = DateFormat('MM/dd');
     final platformColor = _getPlatformColor(contact.platform);
     final showReminder = _shouldShowReminder(contact.followUpDate);
+    final isPinned = contact.sortOrder < 0;
 
     return GestureDetector(
       onTap: () => _showContactDetail(context, contact),
-      onLongPress: showOptions ? () => _showContactOptions(context, contact) : null,
+      onLongPress: () => _showContactOptions(
+        context,
+        contact,
+        allContacts,
+        isProActivated,
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
@@ -353,11 +310,11 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       ],
                     ),
                   ),
-                  if (showOptions)
+                  if (isPinned)
                     Icon(
-                      Icons.more_vert,
+                      Icons.push_pin,
                       size: 18,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                 ],
               ),
@@ -366,31 +323,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               Positioned(
                 top: 8,
                 right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.red[400],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.notifications_active, color: Colors.white, size: 14),
-                      SizedBox(width: 4),
-                      Text(
-                        '该打个招呼啦',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                child: _ReminderBubble(contactId: contact.id),
               ),
           ],
         ),
@@ -398,7 +331,33 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     );
   }
 
-  void _showContactOptions(BuildContext context, Contact contact) {
+  bool _hasPinnedOtherContact(Contact current, List<Contact> contacts) {
+    return contacts.any((item) => item.id != current.id && item.sortOrder < 0);
+  }
+
+  Future<void> _showProDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('升级提示'),
+        content: const Text('关注微信公众号：易悦网络 ，限量免费激活Pro版'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showContactOptions(
+    BuildContext context,
+    Contact contact,
+    List<Contact> allContacts,
+    bool isProActivated,
+  ) {
+    final isPinned = contact.sortOrder < 0;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -420,6 +379,52 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            ListTile(
+              leading: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                color: isPinned
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                isPinned ? '取消置顶' : '置顶',
+                style: TextStyle(
+                  color: isPinned
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                final dbService = ref.read(localDbServiceProvider);
+                if (isPinned) {
+                  await dbService.unpinContact(contact.id);
+                  if (this.context.mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(
+                        content: Text('已取消置顶'),
+                        duration: Duration(milliseconds: 500),
+                      ),
+                    );
+                  }
+                  return;
+                }
+                if (!isProActivated &&
+                    _hasPinnedOtherContact(contact, allContacts)) {
+                  await _showProDialog(this.context);
+                  return;
+                }
+                await dbService.pinContact(contact.id);
+                if (this.context.mounted) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已置顶'),
+                      duration: Duration(milliseconds: 500),
+                    ),
+                  );
+                }
+              },
+            ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Colors.red[400]),
               title: Text('删除联系人', style: TextStyle(color: Colors.red[400])),
@@ -447,7 +452,10 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                   await dbService.deleteContact(contact.id);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已删除')),
+                      const SnackBar(
+                        content: Text('已删除'),
+                        duration: Duration(milliseconds: 500),
+                      ),
                     );
                   }
                 }
@@ -531,7 +539,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('昵称已复制'),
-                                  duration: Duration(seconds: 1),
+                                  duration: Duration(milliseconds: 500),
                                 ),
                               );
                             },
@@ -602,7 +610,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('$label 已复制'),
-              duration: const Duration(seconds: 1),
+              duration: const Duration(milliseconds: 500),
             ),
           );
         },
@@ -704,142 +712,155 @@ class _ContactsEmptyStateState extends State<_ContactsEmptyState>
           stops: const [0.0, 0.5, 1.0],
         ),
       ),
-      child: SafeArea(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Spacer(flex: 2),
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _floatAnimation.value),
-                  child: child,
-                );
-              },
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      tertiaryColor.withValues(alpha: 0.2),
-                      tertiaryColor.withValues(alpha: 0.1),
-                    ],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: tertiaryColor.withValues(alpha: 0.15),
-                      blurRadius: 30,
-                      spreadRadius: 8,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: tertiaryColor.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.auto_awesome,
-                      size: 32,
-                      color: tertiaryColor,
-                    ),
-                  ),
-                ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
               ),
-            ),
-            const SizedBox(height: 24),
-            ShaderMask(
-              shaderCallback: (bounds) => LinearGradient(
-                colors: [
-                  tertiaryColor,
-                  Theme.of(context).colorScheme.primary,
-                ],
-              ).createShader(bounds),
-              child: Text(
-                '收集心动瞬间',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1,
-                    ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '每一个联系方式都是一段故事的开始',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '成功拿到联系方式后，会自动收藏在这里',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                  ),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: tertiaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: tertiaryColor.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: tertiaryColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.lightbulb_outline,
-                      color: tertiaryColor,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+              child: IntrinsicHeight(
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          '小贴士',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: tertiaryColor,
+                        AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, child) {
+                            return Transform.translate(
+                              offset: Offset(0, _floatAnimation.value),
+                              child: child,
+                            );
+                          },
+                          child: Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  tertiaryColor.withValues(alpha: 0.2),
+                                  tertiaryColor.withValues(alpha: 0.1),
+                                ],
                               ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: tertiaryColor.withValues(alpha: 0.15),
+                                  blurRadius: 30,
+                                  spreadRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  color: tertiaryColor.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.auto_awesome,
+                                  size: 32,
+                                  color: tertiaryColor,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 24),
+                        ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: [
+                              tertiaryColor,
+                              Theme.of(context).colorScheme.primary,
+                            ],
+                          ).createShader(bounds),
+                          child: Text(
+                            '收集心动瞬间',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1,
+                                ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Text(
-                          '去「记录」页面添加你的第一次搭讪吧！',
+                          '每一个联系方式都是一段故事的开始',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '成功拿到联系方式后，会自动收藏在这里',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                              ),
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: tertiaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: tertiaryColor.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: tertiaryColor.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.lightbulb_outline,
+                                  color: tertiaryColor,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '小贴士',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: tertiaryColor,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '去「记录」页面添加你的第一次搭讪吧！',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-            const SizedBox(height: 24),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -887,6 +908,101 @@ class _SearchEmptyState extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReminderBubble extends StatefulWidget {
+  final int contactId;
+
+  const _ReminderBubble({required this.contactId});
+
+  @override
+  State<_ReminderBubble> createState() => _ReminderBubbleState();
+}
+
+class _ReminderBubbleState extends State<_ReminderBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _expandAnimation;
+  late final Animation<double> _collapseAnimation;
+
+  bool get _isCollapsing => _controller.value >= 0.88;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..forward();
+
+    _expandAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 0.12, curve: Curves.easeOutCubic),
+    );
+    _collapseAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.88, 1.0, curve: Curves.easeInCubic),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        double widthFactor;
+        if (_controller.value <= 0.12) {
+          widthFactor = _expandAnimation.value;
+        } else if (_controller.value < 0.88) {
+          widthFactor = 1;
+        } else {
+          widthFactor = 1 - _collapseAnimation.value;
+        }
+
+        if (widthFactor <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        return ClipRect(
+          child: Align(
+            alignment:
+                _isCollapsing ? Alignment.centerLeft : Alignment.centerRight,
+            widthFactor: widthFactor,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        key: ValueKey('reminder-${widget.contactId}'),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.red[400],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.notifications_active, color: Colors.white, size: 14),
+            SizedBox(width: 4),
+            Text(
+              '该打个招呼啦',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),

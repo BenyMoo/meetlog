@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/db_providers.dart';
+import '../providers/pro_provider.dart';
 import '../providers/theme_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -9,6 +10,7 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isProActivated = ref.watch(proActivatedProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('设置'),
@@ -37,6 +39,29 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             Text(
+              '会员',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            _buildSettingsCard(
+              context,
+              children: [
+                _buildSettingsTile(
+                  context,
+                  icon: isProActivated ? Icons.verified : Icons.workspace_premium,
+                  title: '激活 Pro 版',
+                  subtitle: isProActivated
+                      ? '当前状态：已激活'
+                      : '关注公众号获取激活码，解锁多置顶',
+                  onTap: () => _showProActivationDialog(context, ref),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Text(
               '数据管理',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -58,11 +83,17 @@ class SettingsScreen extends ConsumerWidget {
                     if (context.mounted) {
                       if (path != null) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('备份已保存: $path')),
+                          SnackBar(
+                            content: Text('备份已保存: $path'),
+                            duration: const Duration(milliseconds: 500),
+                          ),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('导出已取消')),
+                          const SnackBar(
+                            content: Text('导出已取消'),
+                            duration: Duration(milliseconds: 500),
+                          ),
                         );
                       }
                     }
@@ -80,11 +111,17 @@ class SettingsScreen extends ConsumerWidget {
                     if (context.mounted) {
                       if (success) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('数据已恢复')),
+                          const SnackBar(
+                            content: Text('数据已恢复'),
+                            duration: Duration(milliseconds: 500),
+                          ),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('导入失败或已取消')),
+                          const SnackBar(
+                            content: Text('导入失败或已取消'),
+                            duration: Duration(milliseconds: 500),
+                          ),
                         );
                       }
                     }
@@ -114,7 +151,10 @@ class SettingsScreen extends ConsumerWidget {
                     await dbService.insertTestData();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('测试数据已插入')),
+                        const SnackBar(
+                          content: Text('测试数据已插入'),
+                          duration: Duration(milliseconds: 500),
+                        ),
                       );
                     }
                   },
@@ -149,7 +189,10 @@ class SettingsScreen extends ConsumerWidget {
                       await dbService.clearAllData();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('数据已清空')),
+                          const SnackBar(
+                            content: Text('数据已清空'),
+                            duration: Duration(milliseconds: 500),
+                          ),
                         );
                       }
                     }
@@ -180,6 +223,71 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showProActivationDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('激活 Pro 版'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '关注微信公众号：$proActivationWechat',
+              style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '输入激活码后可解锁多置顶、导出报告等 Pro 功能。',
+              style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: '请输入激活码',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final notifier = ref.read(proActivatedProvider.notifier);
+              final success = await notifier.activate(controller.text);
+              if (!dialogContext.mounted) return;
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(success ? 'Pro 已激活' : '激活码无效，请关注公众号获取'),
+                  duration: const Duration(milliseconds: 500),
+                ),
+              );
+            },
+            child: const Text('激活'),
+          ),
+        ],
       ),
     );
   }

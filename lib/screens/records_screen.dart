@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,7 +7,10 @@ import 'package:intl/intl.dart';
 
 import '../models/approach_record.dart';
 import '../providers/db_providers.dart';
+import '../providers/pro_provider.dart';
 import '../services/local_db_service.dart';
+
+bool _hasShownLongPressHintThisSession = false;
 
 class RecordsScreen extends ConsumerStatefulWidget {
   const RecordsScreen({super.key});
@@ -15,12 +20,34 @@ class RecordsScreen extends ConsumerStatefulWidget {
 }
 
 class _RecordsScreenState extends ConsumerState<RecordsScreen> {
-  bool _isReordering = false;
-  List<ApproachRecord> _records = [];
+  bool _showLongPressHint = !_hasShownLongPressHintThisSession;
+  Timer? _hintTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_showLongPressHint) {
+      _hasShownLongPressHintThisSession = true;
+      _hintTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _showLongPressHint = false;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _hintTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final recordsAsync = ref.watch(recordsProvider);
+    final isProActivated = ref.watch(proActivatedProvider);
 
     return recordsAsync.when(
       data: (records) {
@@ -33,44 +60,19 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
               scrolledUnderElevation: 0,
             ),
             body: _EmptyStateWidget(
+              showLongPressHint: _showLongPressHint,
               onAction: () {
                 context.push('/add-record');
               },
             ),
           );
         }
-        
-        if (!_isReordering || _records.isEmpty) {
-          _records = List.from(records);
-        }
-        
         return Scaffold(
           appBar: AppBar(
             title: const Text('记录'),
             centerTitle: true,
             elevation: 0,
             scrolledUnderElevation: 0,
-            actions: [
-              if (records.length > 1)
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _isReordering = !_isReordering;
-                      if (!_isReordering) {
-                        _saveOrder();
-                      }
-                    });
-                  },
-                  child: Text(
-                    _isReordering ? '完成' : '排序',
-                    style: TextStyle(
-                      color: _isReordering 
-                          ? Theme.of(context).colorScheme.primary 
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-            ],
           ),
           floatingActionButton: FloatingActionButton.small(
             onPressed: () {
@@ -78,9 +80,12 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
             },
             child: const Icon(Icons.add, size: 24),
           ),
-          body: _isReordering 
-              ? _buildReorderableList(context, ref)
-              : _buildRecordsList(context, ref),
+          body: _buildRecordsList(
+            context,
+            ref,
+            records,
+            isProActivated: isProActivated,
+          ),
         );
       },
       loading: () => Scaffold(
@@ -100,47 +105,24 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
     );
   }
 
-  Future<void> _saveOrder() async {
-    final dbService = ref.read(localDbServiceProvider);
-    for (int i = 0; i < _records.length; i++) {
-      if (_records[i].id != null) {
-        await dbService.updateRecordOrder(_records[i].id!, i);
-      }
-    }
-    ref.invalidate(recordsProvider);
-  }
-
-  Widget _buildReorderableList(BuildContext context, WidgetRef ref) {
-    return ReorderableListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: _records.length,
-      onReorder: (oldIndex, newIndex) {
-        setState(() {
-          if (newIndex > oldIndex) {
-            newIndex -= 1;
-          }
-          final item = _records.removeAt(oldIndex);
-          _records.insert(newIndex, item);
-        });
-      },
-      itemBuilder: (context, index) {
-        final record = _records[index];
-        return Container(
-          key: ValueKey(record.id),
-          margin: const EdgeInsets.only(bottom: 8),
-          child: _buildRecordCard(context, ref, record, showDeleteButton: false),
-        );
-      },
-    );
-  }
-
-  Widget _buildRecordsList(BuildContext context, WidgetRef ref) {
+  Widget _buildRecordsList(
+    BuildContext context,
+    WidgetRef ref,
+    List<ApproachRecord> records,
+    {required bool isProActivated,}
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: _records.length,
+      itemCount: records.length,
       itemBuilder: (context, index) {
-        final record = _records[index];
-        return _buildRecordCard(context, ref, record);
+        final record = records[index];
+        return _buildRecordCard(
+          context,
+          ref,
+          record,
+          records: records,
+          isProActivated: isProActivated,
+        );
       },
     );
   }
@@ -149,13 +131,21 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
     BuildContext context,
     WidgetRef ref,
     ApproachRecord record, {
-    bool showDeleteButton = true,
+    required List<ApproachRecord> records,
+    required bool isProActivated,
   }) {
     final dateFormat = DateFormat('MM/dd HH:mm');
     final isSuccess = record.isSuccess;
+    final isPinned = record.sortOrder < 0;
 
     return GestureDetector(
-      onLongPress: showDeleteButton ? () => _showRecordOptions(context, ref, record) : null,
+      onLongPress: () => _showRecordOptions(
+        context,
+        ref,
+        record,
+        records,
+        isProActivated,
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
@@ -248,12 +238,12 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
                         ),
                   ),
                 ),
-              if (showDeleteButton) ...[
+              if (isPinned) ...[
                 const SizedBox(width: 8),
                 Icon(
-                  Icons.more_vert,
+                  Icons.push_pin,
                   size: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ],
             ],
@@ -263,7 +253,37 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
     );
   }
 
-  void _showRecordOptions(BuildContext context, WidgetRef ref, ApproachRecord record) {
+  bool _hasPinnedOtherRecord(
+    ApproachRecord current,
+    List<ApproachRecord> records,
+  ) {
+    return records.any((item) => item.id != current.id && item.sortOrder < 0);
+  }
+
+  Future<void> _showProDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('升级提示'),
+        content: const Text('关注微信公众号：易悦网络 ，限量免费激活Pro版'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRecordOptions(
+    BuildContext context,
+    WidgetRef ref,
+    ApproachRecord record,
+    List<ApproachRecord> records,
+    bool isProActivated,
+  ) {
+    final isPinned = record.sortOrder < 0;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -285,6 +305,51 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            ListTile(
+              leading: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                color: isPinned
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                isPinned ? '取消置顶' : '置顶',
+                style: TextStyle(
+                  color: isPinned
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                final dbService = ref.read(localDbServiceProvider);
+                if (isPinned) {
+                  await dbService.unpinRecord(record.id);
+                  if (this.context.mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(
+                        content: Text('已取消置顶'),
+                        duration: Duration(milliseconds: 500),
+                      ),
+                    );
+                  }
+                  return;
+                }
+                if (!isProActivated && _hasPinnedOtherRecord(record, records)) {
+                  await _showProDialog(this.context);
+                  return;
+                }
+                await dbService.pinRecord(record.id);
+                if (this.context.mounted) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已置顶'),
+                      duration: Duration(milliseconds: 500),
+                    ),
+                  );
+                }
+              },
+            ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Colors.red[400]),
               title: Text('删除记录', style: TextStyle(color: Colors.red[400])),
@@ -312,7 +377,10 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
                   await dbService.deleteRecord(record.id);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已删除')),
+                      const SnackBar(
+                        content: Text('已删除'),
+                        duration: Duration(milliseconds: 500),
+                      ),
                     );
                   }
                 }
@@ -326,9 +394,13 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
 }
 
 class _EmptyStateWidget extends StatefulWidget {
+  final bool showLongPressHint;
   final VoidCallback onAction;
 
-  const _EmptyStateWidget({required this.onAction});
+  const _EmptyStateWidget({
+    required this.showLongPressHint,
+    required this.onAction,
+  });
 
   @override
   State<_EmptyStateWidget> createState() => _EmptyStateWidgetState();
@@ -537,6 +609,27 @@ class _EmptyStateWidgetState extends State<_EmptyStateWidget>
                       color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                     ),
               ),
+              Text(
+                  '有记录列表后，长按记录可置顶或删除',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant
+                            .withValues(alpha: 0.6),
+                      ),
+              ),
+              // if (widget.showLongPressHint) ...[
+              //   const SizedBox(height: 10),
+              //   Text(
+              //     '长按记录可置顶或删除',
+              //     style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              //           color: Theme.of(context)
+              //               .colorScheme
+              //               .onSurfaceVariant
+              //               .withValues(alpha: 0.6),
+              //         ),
+              //   ),
+              // ],
             ],
           ),
         ),
