@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../providers/db_providers.dart';
 import '../providers/pro_provider.dart';
@@ -217,12 +218,46 @@ class SettingsScreen extends ConsumerWidget {
                   icon: Icons.info_outline,
                   title: '版本',
                   subtitle: '1.0.0',
-                  onTap: null,
+                  onTap: () => _showVersionNoticeDialog(context),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showVersionNoticeDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('用户说明'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('1. 用户数据完全本地存储，不收集任何个人信息。'),
+            SizedBox(height: 8),
+            Text('2. 未经授权，不得对本应用进行二次开发、转售或用于商业售卖。'),
+            SizedBox(height: 8),
+            Text('3. 用户继续使用本应用，即视为同意用户协议与隐私政策。'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              SystemNavigator.pop();
+            },
+            child: const Text('不同意'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('同意'),
+          ),
+        ],
       ),
     );
   }

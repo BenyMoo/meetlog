@@ -35,7 +35,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (_selectedRange == TimeRange.all) return null;
     final now = DateTime.now();
     if (_selectedRange == TimeRange.week) {
-      return now;
+      return DateTime(
+        now.year,
+        now.month,
+        now.day + (DateTime.daysPerWeek - now.weekday),
+      );
     } else {
       return DateTime(now.year, now.month + 1, 0);
     }
@@ -205,10 +209,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     }
 
-    if (records.isEmpty) {
-      return _DashboardEmptyState(selectedRange: _selectedRange);
-    }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
       child: Column(
@@ -255,6 +255,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 24),
+          if (records.isEmpty)
+            _DashboardEmptySection(selectedRange: _selectedRange)
+          else ...[
           _buildSummaryCard(context, records.length, successCount, failCount),
           const SizedBox(height: 20),
           _buildPieChartSection(context, successCount, failCount),
@@ -265,6 +268,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
           if (failRecords.isNotEmpty) ...[
             _buildReflectionWall(context, failRecords),
+          ],
           ],
         ],
       ),
@@ -556,16 +560,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
-class _DashboardEmptyState extends StatefulWidget {
+class _DashboardEmptySection extends StatefulWidget {
   final TimeRange selectedRange;
 
-  const _DashboardEmptyState({required this.selectedRange});
+  const _DashboardEmptySection({required this.selectedRange});
 
   @override
-  State<_DashboardEmptyState> createState() => _DashboardEmptyStateState();
+  State<_DashboardEmptySection> createState() => _DashboardEmptySectionState();
 }
 
-class _DashboardEmptyStateState extends State<_DashboardEmptyState>
+class _DashboardEmptySectionState extends State<_DashboardEmptySection>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _floatAnimation;
@@ -596,35 +600,29 @@ class _DashboardEmptyStateState extends State<_DashboardEmptyState>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
-    
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Theme.of(context).scaffoldBackgroundColor,
-            primaryColor.withValues(alpha: isDark ? 0.08 : 0.05),
-            primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
-          ],
-          stops: const [0.0, 0.5, 1.0],
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).scaffoldBackgroundColor,
+              primaryColor.withValues(alpha: isDark ? 0.08 : 0.05),
+              primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ),
+          borderRadius: BorderRadius.circular(24),
         ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight,
-              ),
-              child: IntrinsicHeight(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
               AnimatedBuilder(
                 animation: _controller,
                 builder: (context, child) {
@@ -692,17 +690,22 @@ class _DashboardEmptyStateState extends State<_DashboardEmptyState>
               Text(
                 widget.selectedRange == TimeRange.week
                     ? '本周还没有任何记录'
-                    : '本月还没有任何记录',
+                    : widget.selectedRange == TimeRange.month
+                        ? '本月还没有任何记录'
+                        : '还没有任何记录',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
               const SizedBox(height: 2),
               Text(
-                '开始记录后，这里将展示你的成长轨迹',
+                '请记录最新数据',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant
+                          .withValues(alpha: 0.7),
                     ),
               ),
               const SizedBox(height: 24),
@@ -719,48 +722,25 @@ class _DashboardEmptyStateState extends State<_DashboardEmptyState>
                   children: [
                     Row(
                       children: [
-                        _buildFeatureItem(
-                          context,
-                          label: '成功率分析',
-                        ),
+                        _buildFeatureItem(context, label: '成功率分析'),
                         const SizedBox(width: 16),
-                        _buildFeatureItem(
-                          context,
-                          label: '失败原因',
-                        ),
+                        _buildFeatureItem(context, label: '失败原因'),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        _buildFeatureItem(
-                          context,
-                          label: '复盘回顾',
-                        ),
+                        _buildFeatureItem(context, label: '复盘回顾'),
                         const SizedBox(width: 16),
-                        _buildFeatureItem(
-                          context,
-                          label: '成长曲线',
-                        ),
+                        _buildFeatureItem(context, label: '成长曲线'),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                '添加第一条记录，解锁全部功能',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                    ),
-              ),
             ],
           ),
         ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

@@ -847,6 +847,12 @@ class _ContactsEmptyStateState extends State<_ContactsEmptyState>
                                             color: Theme.of(context).colorScheme.onSurfaceVariant,
                                           ),
                                     ),
+                                     Text(
+                                      '有了联系人记录后，点击和长按对应数据可以进行操作！',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
                                   ],
                                 ),
                               ),
