@@ -152,7 +152,7 @@ dart run build_runner build --delete-conflicting-outputs
 
 ---
 
-## 阶段四：应用初始化与路由配置
+## ✅ 阶段四：应用初始化与路由配置
 
 ### 4.1 main.dart 初始化流程
 ```dart
