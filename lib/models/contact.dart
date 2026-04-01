@@ -11,7 +11,11 @@ class Contact {
   final String platform;
   final String account;
   final int impressionScore;
+  final String? impression;
+  final String? hobby;
   final DateTime? followUpDate;
+  final DateTime? createdAt;
+  int sortOrder;
 
   Contact({
     this.id = Isar.autoIncrement,
@@ -20,7 +24,11 @@ class Contact {
     required this.platform,
     required this.account,
     required this.impressionScore,
+    this.impression,
+    this.hobby,
     this.followUpDate,
+    this.createdAt,
+    this.sortOrder = 0,
   });
 
   factory Contact.fromJson(Map<String, dynamic> json) {
@@ -31,9 +39,15 @@ class Contact {
       platform: json['platform'] as String,
       account: json['account'] as String,
       impressionScore: json['impressionScore'] as int,
+      impression: json['impression'] as String?,
+      hobby: json['hobby'] as String?,
       followUpDate: json['followUpDate'] != null
           ? DateTime.parse(json['followUpDate'] as String)
           : null,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : null,
+      sortOrder: json['sortOrder'] as int? ?? 0,
     );
   }
 
@@ -45,7 +59,11 @@ class Contact {
       'platform': platform,
       'account': account,
       'impressionScore': impressionScore,
+      'impression': impression,
+      'hobby': hobby,
       'followUpDate': followUpDate?.toIso8601String(),
+      'createdAt': createdAt?.toIso8601String(),
+      'sortOrder': sortOrder,
     };
   }
 }

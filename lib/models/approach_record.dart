@@ -11,6 +11,7 @@ class ApproachRecord {
   final bool isSuccess;
   final String? failReason;
   final String? reflection;
+  int sortOrder;
 
   ApproachRecord({
     this.id = Isar.autoIncrement,
@@ -19,6 +20,7 @@ class ApproachRecord {
     required this.isSuccess,
     this.failReason,
     this.reflection,
+    this.sortOrder = 0,
   });
 
   factory ApproachRecord.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class ApproachRecord {
       isSuccess: json['isSuccess'] as bool,
       failReason: json['failReason'] as String?,
       reflection: json['reflection'] as String?,
+      sortOrder: json['sortOrder'] as int? ?? 0,
     );
   }
 
@@ -40,6 +43,7 @@ class ApproachRecord {
       'isSuccess': isSuccess,
       'failReason': failReason,
       'reflection': reflection,
+      'sortOrder': sortOrder,
     };
   }
 }

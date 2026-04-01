@@ -6,6 +6,8 @@ import '../screens/main_screen.dart';
 import '../screens/records_screen.dart';
 import '../screens/contacts_screen.dart';
 import '../screens/dashboard_screen.dart';
+import '../screens/add_record_screen.dart';
+import '../screens/settings_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -41,6 +43,22 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/add-record',
+        name: 'add-record',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (context, state) => const MaterialPage(
+          child: AddRecordScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/settings',
+        name: 'settings',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (context, state) => const MaterialPage(
+          child: SettingsScreen(),
+        ),
       ),
     ],
   );

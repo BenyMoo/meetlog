@@ -1,13 +1,13 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../models/approach_record.dart';
 import '../providers/db_providers.dart';
-import 'settings_screen.dart';
 
-enum TimeRange { week, month }
+enum TimeRange { week, month, all }
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -19,7 +19,8 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   TimeRange _selectedRange = TimeRange.week;
 
-  DateTime get _startDate {
+  DateTime? get _startDate {
+    if (_selectedRange == TimeRange.all) return null;
     final now = DateTime.now();
     if (_selectedRange == TimeRange.week) {
       return now.subtract(Duration(days: now.weekday - 1));
@@ -28,7 +29,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  DateTime get _endDate {
+  DateTime? get _endDate {
+    if (_selectedRange == TimeRange.all) return null;
     final now = DateTime.now();
     if (_selectedRange == TimeRange.week) {
       return now;
@@ -38,18 +40,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   List<ApproachRecord> _filterRecordsByRange(List<ApproachRecord> records) {
+    if (_selectedRange == TimeRange.all) return records;
     return records.where((r) {
-      return r.dateTime.isAfter(_startDate.subtract(const Duration(seconds: 1))) &&
-          r.dateTime.isBefore(_endDate.add(const Duration(days: 1)));
+      final start = _startDate;
+      final end = _endDate;
+      if (start == null || end == null) return true;
+      return r.dateTime.isAfter(start.subtract(const Duration(seconds: 1))) &&
+          r.dateTime.isBefore(end.add(const Duration(days: 1)));
     }).toList();
   }
 
   void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const SettingsScreen(),
-      ),
-    );
+    context.push('/settings');
   }
 
   @override
@@ -95,6 +97,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     }
 
+    if (records.isEmpty) {
+      return _DashboardEmptyState(selectedRange: _selectedRange);
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
       child: Column(
@@ -102,8 +108,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         children: [
           SegmentedButton<TimeRange>(
             segments: const [
-              ButtonSegment(value: TimeRange.week, label: Text('本周总结')),
-              ButtonSegment(value: TimeRange.month, label: Text('本月总结')),
+              ButtonSegment(value: TimeRange.week, label: Text('本周')),
+              ButtonSegment(value: TimeRange.month, label: Text('本月')),
+              ButtonSegment(value: TimeRange.all, label: Text('全部')),
             ],
             selected: {_selectedRange},
             onSelectionChanged: (Set<TimeRange> selection) {
@@ -115,18 +122,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 24),
           _buildSummaryCard(context, records.length, successCount, failCount),
           const SizedBox(height: 20),
-          if (records.isNotEmpty) ...[
-            _buildPieChartSection(context, successCount, failCount),
+          _buildPieChartSection(context, successCount, failCount),
+          const SizedBox(height: 24),
+          if (failReasonStats.isNotEmpty) ...[
+            _buildBarChartSection(context, failReasonStats),
             const SizedBox(height: 24),
-            if (failReasonStats.isNotEmpty) ...[
-              _buildBarChartSection(context, failReasonStats),
-              const SizedBox(height: 24),
-            ],
-            if (failRecords.isNotEmpty) ...[
-              _buildReflectionWall(context, failRecords),
-            ],
-          ] else
-            _DashboardEmptyState(selectedRange: _selectedRange),
+          ],
+          if (failRecords.isNotEmpty) ...[
+            _buildReflectionWall(context, failRecords),
+          ],
         ],
       ),
     );
@@ -183,7 +187,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }) {
     return Column(
       children: [
-        Icon(icon, color: color ?? Colors.grey[600], size: 24),
+        Icon(icon, color: color ?? Theme.of(context).colorScheme.onSurfaceVariant, size: 24),
         const SizedBox(height: 8),
         Text(
           value,
@@ -196,7 +200,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
       ],
@@ -207,7 +211,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Container(
       height: 50,
       width: 1,
-      color: Colors.grey[200],
+      color: Theme.of(context).colorScheme.outlineVariant,
     );
   }
 
@@ -369,12 +373,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final dateFormat = DateFormat('MM/dd HH:mm');
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,19 +388,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Text(
                 dateFormat.format(record.dateTime),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[500],
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFF7043).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   record.failReason ?? '',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 11,
                         color: const Color(0xFFFF7043),
                         fontWeight: FontWeight.w500,
                       ),
@@ -404,10 +410,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             record.reflection!,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -453,26 +459,37 @@ class _DashboardEmptyStateState extends State<_DashboardEmptyState>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
     return Container(
       width: double.infinity,
+      height: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
             Theme.of(context).scaffoldBackgroundColor,
-            const Color(0xFFE3F2FD).withValues(alpha: 0.5),
-            const Color(0xFFBBDEFB).withValues(alpha: 0.3),
+            primaryColor.withValues(alpha: isDark ? 0.08 : 0.05),
+            primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
           ],
           stops: const [0.0, 0.5, 1.0],
         ),
       ),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+              ),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
               AnimatedBuilder(
                 animation: _controller,
                 builder: (context, child) {
@@ -483,83 +500,84 @@ class _DashboardEmptyStateState extends State<_DashboardEmptyState>
                 },
                 child: Container(
                   width: 120,
-                  height: 120,
+                  height: 96,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        const Color(0xFF42A5F5).withValues(alpha: 0.2),
-                        const Color(0xFF1E88E5).withValues(alpha: 0.1),
+                        primaryColor.withValues(alpha: 0.2),
+                        primaryColor.withValues(alpha: 0.1),
                       ],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF1E88E5).withValues(alpha: 0.15),
-                        blurRadius: 40,
-                        spreadRadius: 10,
+                        color: primaryColor.withValues(alpha: 0.15),
+                        blurRadius: 30,
+                        spreadRadius: 8,
                       ),
                     ],
                   ),
                   child: Center(
                     child: Container(
-                      width: 80,
-                      height: 80,
+                      width: 64,
+                      height: 64,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF42A5F5).withValues(alpha: 0.15),
+                        color: primaryColor.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.insights_rounded,
-                        size: 40,
-                        color: Color(0xFF1E88E5),
+                        size: 32,
+                        color: primaryColor,
                       ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
+                shaderCallback: (bounds) => LinearGradient(
                   colors: [
-                    Color(0xFF1E88E5),
-                    Color(0xFF42A5F5),
+                    primaryColor,
+                    Theme.of(context).colorScheme.tertiary,
                   ],
                 ).createShader(bounds),
                 child: Text(
                   '用数据见证成长',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         letterSpacing: 1,
                       ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 widget.selectedRange == TimeRange.week
                     ? '本周还没有任何记录'
                     : '本月还没有任何记录',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 '开始记录后，这里将展示你的成长轨迹',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[500],
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                     ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD).withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(16),
+                  color: primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFF42A5F5).withValues(alpha: 0.3),
+                    color: primaryColor.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -598,12 +616,16 @@ class _DashboardEmptyStateState extends State<_DashboardEmptyState>
               Text(
                 '添加第一条记录，解锁全部功能',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[400],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                     ),
               ),
             ],
           ),
         ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -612,26 +634,27 @@ class _DashboardEmptyStateState extends State<_DashboardEmptyState>
     BuildContext context, {
     required String label,
   }) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Expanded(
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF42A5F5).withValues(alpha: 0.15),
+              color: primaryColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.lock_outline,
               size: 16,
-              color: Color(0xFF1E88E5),
+              color: primaryColor,
             ),
           ),
           const SizedBox(width: 10),
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w500,
                 ),
           ),

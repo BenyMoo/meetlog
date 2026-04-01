@@ -25,13 +25,25 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
   final _accountController = TextEditingController();
   final _locationController = TextEditingController();
   final _reflectionController = TextEditingController();
+  final _impressionController = TextEditingController();
+  final _hobbyController = TextEditingController();
 
   String _selectedPlatform = '微信';
   int _impressionScore = 3;
   String? _selectedFailReason;
 
-  final List<String> _platforms = ['微信', '电话', '小红书', 'Instagram'];
-  final List<String> _failReasons = ['太紧张', '开场白生硬', '对方有伴侣', '直接被拒', '其他'];
+  final List<String> _platforms = ['微信', 'QQ', '微博', '抖音', '小红书', '电话', 'Instagram'];
+  final List<String> _failReasons = [
+    '太紧张',
+    '开场白生硬',
+    '对方有伴侣',
+    '直接被拒',
+    '时机不对',
+    '话题枯竭',
+    '表现不自然',
+    '对方赶时间',
+    '其他'
+  ];
 
   @override
   void initState() {
@@ -58,6 +70,8 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
     _accountController.dispose();
     _locationController.dispose();
     _reflectionController.dispose();
+    _impressionController.dispose();
+    _hobbyController.dispose();
     super.dispose();
   }
 
@@ -77,6 +91,8 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
       _accountController.clear();
       _locationController.clear();
       _reflectionController.clear();
+      _impressionController.clear();
+      _hobbyController.clear();
       _selectedPlatform = '微信';
       _impressionScore = 3;
       _selectedFailReason = null;
@@ -84,24 +100,22 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
     _animationController.reset();
   }
 
-  Future<void> _saveRecord() async {
-    if (_locationController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入地点')),
-      );
-      return;
+  bool _isFormValid() {
+    if (_isSuccess == true) {
+      return _nameController.text.isNotEmpty &&
+          _accountController.text.isNotEmpty &&
+          _locationController.text.isNotEmpty;
+    } else {
+      return _locationController.text.isNotEmpty && _selectedFailReason != null;
     }
+  }
+
+  Future<void> _saveRecord() async {
+    if (!_isFormValid()) return;
 
     final dbService = ref.read(localDbServiceProvider);
 
     if (_isSuccess == true) {
-      if (_nameController.text.isEmpty || _accountController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请填写称呼和账号')),
-        );
-        return;
-      }
-
       final record = ApproachRecord(
         dateTime: DateTime.now(),
         location: _locationController.text,
@@ -113,18 +127,13 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
         platform: _selectedPlatform,
         account: _accountController.text,
         impressionScore: _impressionScore,
+        impression: _impressionController.text.isEmpty ? null : _impressionController.text,
+        hobby: _hobbyController.text.isEmpty ? null : _hobbyController.text,
         recordId: 0,
       );
 
       await dbService.addRecord(record, contact: contact);
     } else {
-      if (_selectedFailReason == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请选择失败原因')),
-        );
-        return;
-      }
-
       final record = ApproachRecord(
         dateTime: DateTime.now(),
         location: _locationController.text,
@@ -182,20 +191,11 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
               ),
             ],
             if (_isExpanded) ...[
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: _resetForm,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _isSuccess == true ? '成功记录' : '失败复盘',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
+              Text(
+                _isSuccess == true ? '成功记录' : '失败复盘',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const SizedBox(height: 24),
               FadeTransition(
@@ -257,7 +257,7 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
                   children: [
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: color,
                           ),
@@ -265,8 +265,8 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey[600],
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                     ),
                   ],
@@ -306,6 +306,20 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
           hint: '在哪相遇的？如：星巴克/地铁2号线',
           icon: Icons.place_outlined,
         ),
+        const SizedBox(height: 16),
+        _buildInputField(
+          controller: _impressionController,
+          label: '印象',
+          hint: '对方的相貌、特点，如：长发、戴眼镜、穿白裙',
+          icon: Icons.face_outlined,
+        ),
+        const SizedBox(height: 16),
+        _buildInputField(
+          controller: _hobbyController,
+          label: '爱好',
+          hint: '对方喜欢什么、当时在干嘛，如：喜欢喝咖啡、在看书',
+          icon: Icons.favorite_outline,
+        ),
         const SizedBox(height: 24),
         _buildImpressionScore(),
         const SizedBox(height: 32),
@@ -324,17 +338,17 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
           hint: '在哪相遇的？',
           icon: Icons.place_outlined,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Text(
           '失败原因',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 8,
+          runSpacing: 8,
           children: _failReasons.map((reason) {
             final isSelected = _selectedFailReason == reason;
             return ChoiceChip(
@@ -346,50 +360,52 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
                 });
               },
               selectedColor: const Color(0xFFFF7043).withValues(alpha: 0.2),
-              backgroundColor: Colors.grey[100],
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               labelStyle: TextStyle(
-                color: isSelected ? const Color(0xFFFF7043) : Colors.grey[700],
+                fontSize: 12,
+                color: isSelected ? const Color(0xFFFF7043) : Theme.of(context).colorScheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
               side: BorderSide(
                 color: isSelected
                     ? const Color(0xFFFF7043)
-                    : Colors.grey[300]!,
+                    : Theme.of(context).colorScheme.outline,
               ),
             );
           }).toList(),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Text(
           '即时复盘',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         TextField(
           controller: _reflectionController,
           maxLines: 5,
           decoration: InputDecoration(
             hintText: '这次哪里做的不够好？下次怎么改进？',
-            hintStyle: TextStyle(color: Colors.grey[400]),
+            hintStyle: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFFF7043), width: 2),
             ),
             filled: true,
-            fillColor: Colors.grey[50],
+            fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
         _buildSaveButton(),
       ],
     );
@@ -406,31 +422,33 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextField(
           controller: controller,
+          onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400]),
-            prefixIcon: Icon(icon, color: Colors.grey[500]),
+            hintStyle: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            prefixIcon: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
             ),
             filled: true,
-            fillColor: Colors.grey[50],
+            fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
       ],
@@ -443,22 +461,23 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
       children: [
         Text(
           '平台',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey[300]!),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Theme.of(context).colorScheme.outline),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _selectedPlatform,
               isExpanded: true,
+              style: Theme.of(context).textTheme.bodyMedium,
               items: _platforms.map((platform) {
                 return DropdownMenuItem(
                   value: platform,
@@ -483,11 +502,11 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
       children: [
         Text(
           '初印象评分',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(5, (index) {
@@ -500,7 +519,7 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
               icon: Icon(
                 index < _impressionScore ? Icons.star : Icons.star_border,
                 color: const Color(0xFFFFB300),
-                size: 40,
+                size: 28,
               ),
             );
           }),
@@ -508,7 +527,7 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
         Center(
           child: Text(
             '$_impressionScore 分',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFFFFB300),
                   fontWeight: FontWeight.w600,
                 ),
@@ -520,18 +539,24 @@ class _AddRecordScreenState extends ConsumerState<AddRecordScreen>
 
   Widget _buildSaveButton() {
     final color = _isSuccess == true ? const Color(0xFF4CAF50) : const Color(0xFFFF7043);
+    final isValid = _isFormValid();
     return FilledButton(
-      onPressed: _saveRecord,
+      onPressed: isValid ? _saveRecord : null,
       style: FilledButton.styleFrom(
         backgroundColor: color,
+        disabledBackgroundColor: color.withValues(alpha: 0.3),
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
       ),
-      child: const Text(
+      child: Text(
         '保存记录',
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: isValid ? Colors.white : Colors.white.withValues(alpha: 0.5),
+        ),
       ),
     );
   }

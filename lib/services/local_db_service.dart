@@ -42,7 +42,9 @@ class LocalDbService {
           platform: contact.platform,
           account: contact.account,
           impressionScore: contact.impressionScore,
-          followUpDate: contact.followUpDate,
+          impression: contact.impression,
+          hobby: contact.hobby,
+          createdAt: contact.createdAt,
         );
         await isar.contacts.put(newContact);
       }
@@ -53,14 +55,74 @@ class LocalDbService {
 
   Future<List<ApproachRecord>> getAllRecords() async {
     final records = await isar.approachRecords.where().findAll();
-    records.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    final hasCustomOrder = records.any((r) => r.sortOrder > 0);
+    if (hasCustomOrder) {
+      records.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    } else {
+      records.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    }
     return records;
   }
 
   Future<List<Contact>> getAllContacts() async {
     final contacts = await isar.contacts.where().findAll();
-    contacts.sort((a, b) => b.id.compareTo(a.id));
+    final hasCustomOrder = contacts.any((c) => c.sortOrder > 0);
+    if (hasCustomOrder) {
+      contacts.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    } else {
+      contacts.sort((a, b) => b.id.compareTo(a.id));
+    }
     return contacts;
+  }
+
+  Future<ApproachRecord?> getRecordById(int id) async {
+    return await isar.approachRecords.get(id);
+  }
+
+  Future<void> updateRecordOrder(int id, int order) async {
+    await isar.writeTxn(() async {
+      final record = await isar.approachRecords.get(id);
+      if (record != null) {
+        final updatedRecord = ApproachRecord(
+          id: record.id,
+          dateTime: record.dateTime,
+          location: record.location,
+          isSuccess: record.isSuccess,
+          failReason: record.failReason,
+          reflection: record.reflection,
+          sortOrder: order,
+        );
+        await isar.approachRecords.put(updatedRecord);
+      }
+    });
+  }
+
+  Future<void> updateContactOrder(int id, int order) async {
+    await isar.writeTxn(() async {
+      final contact = await isar.contacts.get(id);
+      if (contact != null) {
+        final updatedContact = Contact(
+          id: contact.id,
+          recordId: contact.recordId,
+          name: contact.name,
+          platform: contact.platform,
+          account: contact.account,
+          impressionScore: contact.impressionScore,
+          impression: contact.impression,
+          hobby: contact.hobby,
+          followUpDate: contact.followUpDate,
+          createdAt: contact.createdAt,
+          sortOrder: order,
+        );
+        await isar.contacts.put(updatedContact);
+      }
+    });
+  }
+
+  Future<void> deleteContact(int id) async {
+    await isar.writeTxn(() async {
+      await isar.contacts.delete(id);
+    });
   }
 
   Future<List<Contact>> getContactsByRecordId(int recordId) async {

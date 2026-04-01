@@ -41,6 +41,11 @@ const ApproachRecordSchema = CollectionSchema(
       id: 4,
       name: r'reflection',
       type: IsarType.string,
+    ),
+    r'sortOrder': PropertySchema(
+      id: 5,
+      name: r'sortOrder',
+      type: IsarType.long,
     )
   },
   estimateSize: _approachRecordEstimateSize,
@@ -90,6 +95,7 @@ void _approachRecordSerialize(
   writer.writeBool(offsets[2], object.isSuccess);
   writer.writeString(offsets[3], object.location);
   writer.writeString(offsets[4], object.reflection);
+  writer.writeLong(offsets[5], object.sortOrder);
 }
 
 ApproachRecord _approachRecordDeserialize(
@@ -105,6 +111,7 @@ ApproachRecord _approachRecordDeserialize(
     isSuccess: reader.readBool(offsets[2]),
     location: reader.readString(offsets[3]),
     reflection: reader.readStringOrNull(offsets[4]),
+    sortOrder: reader.readLongOrNull(offsets[5]) ?? 0,
   );
   return object;
 }
@@ -126,6 +133,8 @@ P _approachRecordDeserializeProp<P>(
       return (reader.readString(offset)) as P;
     case 4:
       return (reader.readStringOrNull(offset)) as P;
+    case 5:
+      return (reader.readLongOrNull(offset) ?? 0) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -791,6 +800,62 @@ extension ApproachRecordQueryFilter
       ));
     });
   }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterFilterCondition>
+      sortOrderEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sortOrder',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterFilterCondition>
+      sortOrderGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sortOrder',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterFilterCondition>
+      sortOrderLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sortOrder',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterFilterCondition>
+      sortOrderBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sortOrder',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension ApproachRecordQueryObject
@@ -865,6 +930,19 @@ extension ApproachRecordQuerySortBy
       sortByReflectionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'reflection', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterSortBy> sortBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterSortBy>
+      sortBySortOrderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.desc);
     });
   }
 }
@@ -949,6 +1027,19 @@ extension ApproachRecordQuerySortThenBy
       return query.addSortBy(r'reflection', Sort.desc);
     });
   }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterSortBy> thenBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QAfterSortBy>
+      thenBySortOrderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
 }
 
 extension ApproachRecordQueryWhereDistinct
@@ -984,6 +1075,13 @@ extension ApproachRecordQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'reflection', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<ApproachRecord, ApproachRecord, QDistinct>
+      distinctBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sortOrder');
     });
   }
 }
@@ -1023,6 +1121,12 @@ extension ApproachRecordQueryProperty
   QueryBuilder<ApproachRecord, String?, QQueryOperations> reflectionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'reflection');
+    });
+  }
+
+  QueryBuilder<ApproachRecord, int, QQueryOperations> sortOrderProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sortOrder');
     });
   }
 }
