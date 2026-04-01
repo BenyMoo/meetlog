@@ -211,6 +211,12 @@ class LocalDbService {
     }
   }
 
+  Future<void> clearAllData() async {
+    await isar.writeTxn(() async {
+      await isar.clear();
+    });
+  }
+
   Stream<void> get recordsWatch => isar.approachRecords.watchLazy();
   Stream<void> get contactsWatch => isar.contacts.watchLazy();
 }

@@ -6,12 +6,16 @@ import 'services/local_db_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await LocalDbService.instance.init();
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  try {
+    await LocalDbService.instance.init();
+    runApp(
+      const ProviderScope(
+        child: MyApp(),
+      ),
+    );
+  } catch (e) {
+    debugPrint('应用启动失败: $e');
+  }
 }
 
 class MyApp extends ConsumerWidget {
