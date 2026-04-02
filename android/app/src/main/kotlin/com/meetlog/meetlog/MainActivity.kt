@@ -1,6 +1,8 @@
 package com.meetlog.meetlog
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -22,6 +24,7 @@ import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.meetlog.meetlog/license"
+    private val externalLinkChannelName = "com.meetlog.meetlog/external_link"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -66,6 +69,30 @@ class MainActivity : FlutterActivity() {
                 }
             } catch (e: Exception) {
                 result.error("license_error", e.message, null)
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            externalLinkChannelName,
+        ).setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "openExternalUrl" -> {
+                        val url = call.argument<String>("url")
+                        if (url.isNullOrBlank()) {
+                            result.error("invalid_args", "缺少下载链接", null)
+                            return@setMethodCallHandler
+                        }
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        startActivity(intent)
+                        result.success(null)
+                    }
+
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                result.error("external_link_error", e.message, null)
             }
         }
     }

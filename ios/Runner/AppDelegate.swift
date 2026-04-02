@@ -6,6 +6,7 @@ import CryptoKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let licenseChannelName = "com.meetlog.meetlog/license"
+  private let externalLinkChannelName = "com.meetlog.meetlog/external_link"
 
   override func application(
     _ application: UIApplication,
@@ -49,6 +50,42 @@ import CryptoKit
           }
         } catch {
           result(FlutterError(code: "license_error", message: error.localizedDescription, details: nil))
+        }
+      }
+
+      let externalLinkChannel = FlutterMethodChannel(
+        name: externalLinkChannelName,
+        binaryMessenger: messenger
+      )
+      externalLinkChannel.setMethodCallHandler { call, result in
+        switch call.method {
+        case "openExternalUrl":
+          guard
+            let args = call.arguments as? [String: Any],
+            let urlString = args["url"] as? String,
+            let url = URL(string: urlString)
+          else {
+            result(FlutterError(code: "invalid_args", message: "缺少下载链接", details: nil))
+            return
+          }
+
+          DispatchQueue.main.async {
+            UIApplication.shared.open(url, options: [:]) { success in
+              if success {
+                result(nil)
+              } else {
+                result(
+                  FlutterError(
+                    code: "external_link_error",
+                    message: "无法打开下载链接",
+                    details: nil
+                  )
+                )
+              }
+            }
+          }
+        default:
+          result(FlutterMethodNotImplemented)
         }
       }
     }

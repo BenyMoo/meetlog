@@ -6,6 +6,8 @@ import '../providers/db_providers.dart';
 import '../providers/pro_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/pro_license_service.dart';
+import '../services/app_update_service.dart';
+import '../widgets/update_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -218,47 +220,13 @@ class SettingsScreen extends ConsumerWidget {
                   context,
                   icon: Icons.info_outline,
                   title: '版本',
-                  subtitle: '1.0.0',
-                  onTap: () => _showVersionNoticeDialog(context),
+                  subtitle: 'v${ref.watch(_versionProvider)}',
+                  onTap: () => _checkAndUpdate(context),
                 ),
               ],
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showVersionNoticeDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('用户说明'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('1. 用户数据完全本地存储，不收集任何个人信息。'),
-            SizedBox(height: 8),
-            Text('2. 未经授权，不得对本应用进行二次开发、转售或用于商业售卖。'),
-            SizedBox(height: 8),
-            Text('3. 用户继续使用本应用，即视为同意用户协议与隐私政策。'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              SystemNavigator.pop();
-            },
-            child: const Text('不同意'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('同意'),
-          ),
-        ],
       ),
     );
   }
@@ -670,4 +638,26 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _checkAndUpdate(BuildContext context) async {
+    final service = AppUpdateService();
+    final info = await service.checkForUpdate();
+    if (!context.mounted) return;
+    if (info != null) {
+      UpdateDialog.show(context, info);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('当前已是最新版本'),
+          duration: Duration(milliseconds: 1000),
+        ),
+      );
+    }
+  }
+
+  static final _versionProvider = FutureProvider<String>((ref) async {
+    final service = AppUpdateService();
+    final pkg = await service.getLocalVersion();
+    return pkg.version;
+  });
 }
