@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const proActivationWechat = '易悦网络';
 
 // 激活码，用于激活专业版功能
-const _proActivationCode = '123';
+const _proActivationCode = 'qwe123';
 // const _proActivationCode = 'YYWL-PRO-2026';
 
 final proActivatedProvider =

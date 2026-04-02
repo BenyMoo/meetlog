@@ -30,7 +30,7 @@ class MyApp extends ConsumerWidget {
     final darkTheme = ref.watch(appDarkThemeProvider);
 
     return MaterialApp.router(
-      title: '遇记',
+      title: 'MeetLog',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,

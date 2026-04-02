@@ -354,9 +354,10 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
               leading: Icon(Icons.delete_outline, color: Colors.red[400]),
               title: Text('删除记录', style: TextStyle(color: Colors.red[400])),
               onTap: () async {
+                final pageContext = this.context;
                 Navigator.pop(context);
                 final confirmed = await showDialog<bool>(
-                  context: context,
+                  context: pageContext,
                   builder: (context) => AlertDialog(
                     title: const Text('确认删除'),
                     content: const Text('确定要删除这条记录吗？'),
@@ -372,11 +373,13 @@ class _RecordsScreenState extends ConsumerState<RecordsScreen> {
                     ],
                   ),
                 );
-                if (confirmed == true && context.mounted) {
+                if (confirmed == true && mounted) {
                   final dbService = ref.read(localDbServiceProvider);
                   await dbService.deleteRecord(record.id);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  ref.invalidate(recordsProvider);
+                  ref.invalidate(contactsProvider);
+                  if (mounted) {
+                    ScaffoldMessenger.of(pageContext).showSnackBar(
                       const SnackBar(
                         content: Text('已删除'),
                         duration: Duration(milliseconds: 500),

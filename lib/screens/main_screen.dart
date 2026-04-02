@@ -18,7 +18,6 @@ class MainScreen extends ConsumerWidget {
     return Scaffold(
       body: child,
       bottomNavigationBar: NavigationBar(
-        height: 44,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
         selectedIndex: currentIndex,
         onDestinationSelected: (index) async {
@@ -45,18 +44,18 @@ class MainScreen extends ConsumerWidget {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.edit_note_outlined, size: 16),
-            selectedIcon: Icon(Icons.edit_note, size: 16),
+            icon: Icon(Icons.edit_note_outlined),
+            selectedIcon: Icon(Icons.edit_note),
             label: '记录',
           ),
           NavigationDestination(
-            icon: Icon(Icons.contacts_outlined, size: 16),
-            selectedIcon: Icon(Icons.contacts, size: 16),
+            icon: Icon(Icons.contacts_outlined),
+            selectedIcon: Icon(Icons.contacts),
             label: '联系人',
           ),
           NavigationDestination(
-            icon: Icon(Icons.analytics_outlined, size: 16),
-            selectedIcon: Icon(Icons.analytics, size: 16),
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
             label: '复盘',
           ),
         ],

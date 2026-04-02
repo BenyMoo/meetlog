@@ -429,9 +429,10 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               leading: Icon(Icons.delete_outline, color: Colors.red[400]),
               title: Text('删除联系人', style: TextStyle(color: Colors.red[400])),
               onTap: () async {
+                final pageContext = this.context;
                 Navigator.pop(context);
                 final confirmed = await showDialog<bool>(
-                  context: context,
+                  context: pageContext,
                   builder: (context) => AlertDialog(
                     title: const Text('确认删除'),
                     content: const Text('确定要删除这个联系人吗？'),
@@ -447,11 +448,12 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     ],
                   ),
                 );
-                if (confirmed == true && context.mounted) {
+                if (confirmed == true && mounted) {
                   final dbService = ref.read(localDbServiceProvider);
                   await dbService.deleteContact(contact.id);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  ref.invalidate(contactsProvider);
+                  if (mounted) {
+                    ScaffoldMessenger.of(pageContext).showSnackBar(
                       const SnackBar(
                         content: Text('已删除'),
                         duration: Duration(milliseconds: 500),

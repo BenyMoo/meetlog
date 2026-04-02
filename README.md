@@ -41,6 +41,9 @@ flutter pub get
 
 ```bash
 flutter run
+
+
+flutter run --android-skip-build-dependency-validation
 ```
 
 ### 代码生成
