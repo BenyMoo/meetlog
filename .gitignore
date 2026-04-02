@@ -32,6 +32,7 @@ Flutter/Dart/Pub related
 .pub-cache/
 .pub/
 /build/
+.devkeys/
 
 Symbolication related
 app.*.symbols

@@ -1,11 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-const proActivationWechat = '易悦网络';
-
-// 激活码，用于激活专业版功能
-const _proActivationCode = 'qwe123';
-// const _proActivationCode = 'YYWL-PRO-2026';
+import '../services/pro_license_service.dart';
 
 final proActivatedProvider =
     StateNotifierProvider<ProActivationNotifier, bool>((ref) {
@@ -13,24 +8,37 @@ final proActivatedProvider =
 });
 
 class ProActivationNotifier extends StateNotifier<bool> {
-  static const String _key = 'pro_activated';
+  final ProLicenseService _service = ProLicenseService.instance;
 
   ProActivationNotifier() : super(false) {
     _load();
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    state = prefs.getBool(_key) ?? false;
+    state = await _service.hasValidPersistedLicense();
   }
 
-  Future<bool> activate(String code) async {
-    if (code.trim().toUpperCase() != _proActivationCode) {
-      return false;
+  Future<DeviceIdentity> getDeviceIdentity() {
+    return _service.getDeviceIdentity();
+  }
+
+  Future<String> buildActivationRequest() {
+    return _service.buildActivationRequest();
+  }
+
+  Future<LicenseVerificationResult> activate(String license) async {
+    final result = await _service.verifyLicense(license);
+    if (!result.valid) {
+      state = false;
+      return result;
     }
+    await _service.persistLicense(license);
     state = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_key, true);
-    return true;
+    return result;
+  }
+
+  Future<void> deactivate() async {
+    await _service.clearPersistedLicense();
+    state = false;
   }
 }

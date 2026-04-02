@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../providers/db_providers.dart';
 import '../providers/pro_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/pro_license_service.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -56,7 +57,7 @@ class SettingsScreen extends ConsumerWidget {
                   title: '激活 Pro 版',
                   subtitle: isProActivated
                       ? '当前状态：已激活'
-                      : '关注公众号获取激活码，解锁多置顶',
+                      : '复制设备请求串，去外部系统换取激活码',
                   onTap: () => _showProActivationDialog(context, ref),
                 ),
               ],
@@ -264,65 +265,205 @@ class SettingsScreen extends ConsumerWidget {
 
   void _showProActivationDialog(BuildContext context, WidgetRef ref) {
     final controller = TextEditingController();
+    String activationRequest = '';
+    String deviceSummary = '';
+    String? errorText;
+    bool isBusy = false;
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('激活 Pro 版'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '关注微信公众号：$proActivationWechat',
-              style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '输入激活码后可解锁多置顶、导出报告等 Pro 功能。',
-              style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: '请输入激活码',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => AlertDialog(
+          title: const Text('激活 Pro 版'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '关注微信公众号：$proActivationWechat',
+                  style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+                const SizedBox(height: 8),
+                Text(
+                  '1. 生成并复制设备激活请求\n2. 在外部系统换取激活码\n3. 粘贴激活码完成本机离线激活',
+                  style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                      ),
                 ),
+                const SizedBox(height: 16),
+                FilledButton.tonalIcon(
+                  onPressed: isBusy
+                      ? null
+                      : () async {
+                          setState(() {
+                            isBusy = true;
+                            errorText = null;
+                          });
+                          try {
+                            final notifier =
+                                ref.read(proActivatedProvider.notifier);
+                            final identity =
+                                await notifier.getDeviceIdentity();
+                            final request =
+                                await notifier.buildActivationRequest();
+                            await Clipboard.setData(
+                              ClipboardData(text: request),
+                            );
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
+                            setState(() {
+                              activationRequest = request;
+                              deviceSummary =
+                                  '${identity.deviceIdType}  ${identity.maskedDeviceId}';
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('设备激活请求已复制'),
+                                duration: Duration(milliseconds: 700),
+                              ),
+                            );
+                          } catch (e) {
+                            setState(() {
+                              errorText = e.toString();
+                            });
+                          } finally {
+                            if (dialogContext.mounted) {
+                              setState(() {
+                                isBusy = false;
+                              });
+                            }
+                          }
+                        },
+                  icon: const Icon(Icons.copy_all_outlined),
+                  label: Text(isBusy ? '生成中...' : '生成并复制设备请求'),
+                ),
+                if (deviceSummary.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    '当前设备标识: $deviceSummary',
+                    style: Theme.of(dialogContext).textTheme.bodySmall,
+                  ),
+                ],
+                if (activationRequest.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(dialogContext)
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      activationRequest,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(dialogContext)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: '请输入外部系统返回的激活码',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                if (errorText != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    errorText!,
+                    style: TextStyle(color: Colors.red[400], fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            if (ref.read(proActivatedProvider))
+              TextButton(
+                onPressed: () async {
+                  await ref.read(proActivatedProvider.notifier).deactivate();
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已清除本机激活状态'),
+                      duration: Duration(milliseconds: 700),
+                    ),
+                  );
+                },
+                child: const Text('清除激活'),
               ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: isBusy
+                  ? null
+                  : () async {
+                      setState(() {
+                        isBusy = true;
+                        errorText = null;
+                      });
+                      final notifier = ref.read(proActivatedProvider.notifier);
+                      try {
+                        final result = await notifier.activate(controller.text);
+                        if (!dialogContext.mounted) {
+                          return;
+                        }
+                        if (!result.valid) {
+                          setState(() {
+                            errorText = result.reason;
+                          });
+                          return;
+                        }
+                        Navigator.pop(dialogContext);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Pro 已激活，可离线使用'),
+                            duration: Duration(milliseconds: 700),
+                          ),
+                        );
+                      } catch (e) {
+                        if (!dialogContext.mounted) {
+                          return;
+                        }
+                        setState(() {
+                          errorText = e.toString();
+                        });
+                      } finally {
+                        if (dialogContext.mounted) {
+                          setState(() {
+                            isBusy = false;
+                          });
+                        }
+                      }
+                    },
+              child: const Text('激活'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final notifier = ref.read(proActivatedProvider.notifier);
-              final success = await notifier.activate(controller.text);
-              if (!dialogContext.mounted) return;
-              Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(success ? 'Pro 已激活' : '激活码无效，请关注公众号获取'),
-                  duration: const Duration(milliseconds: 500),
-                ),
-              );
-            },
-            child: const Text('激活'),
-          ),
-        ],
       ),
     );
   }
