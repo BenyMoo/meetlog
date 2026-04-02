@@ -2,7 +2,8 @@ name: meetlog
 description: "A Flutter meeting log application."
 publish_to: 'none'
 
-version: 1.0.0+1
+# TODO 打包改版本号
+version: 1.0.2
 
 environment:
   sdk: ^3.11.4
