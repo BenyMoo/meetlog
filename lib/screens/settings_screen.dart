@@ -288,7 +288,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '1. 生成并复制设备激活请求\n2. 在外部系统换取激活码\n3. 粘贴激活码完成本机离线激活',
+                  '1. 生成激活序列号，会自动复制到剪贴板\n2. 在公众号回复激活MeetLog序列号\n3. 粘贴激活码完成APP激活',
                   style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
                         color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
                       ),
@@ -339,7 +339,7 @@ class SettingsScreen extends ConsumerWidget {
                           }
                         },
                   icon: const Icon(Icons.copy_all_outlined),
-                  label: Text(isBusy ? '生成中...' : '生成并复制设备请求'),
+                  label: Text(isBusy ? '生成中...' : '生成激活序列号-自动复制'),
                 ),
                 if (deviceSummary.isNotEmpty) ...[
                   const SizedBox(height: 12),

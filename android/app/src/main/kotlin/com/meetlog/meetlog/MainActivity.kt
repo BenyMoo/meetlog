@@ -13,6 +13,8 @@ import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.Signature
+import java.security.spec.MGF1ParameterSpec
+import java.security.spec.PSSParameterSpec
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 import javax.crypto.Cipher
@@ -246,10 +248,37 @@ class MainActivity : FlutterActivity() {
         signatureBytes: ByteArray,
         publicKeyPem: String,
     ): Boolean {
-        val signature = Signature.getInstance("SHA256withRSA")
-        signature.initVerify(parseRsaPublicKey(publicKeyPem))
-        signature.update(payloadBytes)
-        return signature.verify(signatureBytes)
+        val publicKey = parseRsaPublicKey(publicKeyPem)
+
+        val pkcs1 = try {
+            val signature = Signature.getInstance("SHA256withRSA")
+            signature.initVerify(publicKey)
+            signature.update(payloadBytes)
+            signature.verify(signatureBytes)
+        } catch (_: Exception) {
+            false
+        }
+        if (pkcs1) {
+            return true
+        }
+
+        return try {
+            val signature = Signature.getInstance("RSASSA-PSS")
+            signature.setParameter(
+                PSSParameterSpec(
+                    "SHA-256",
+                    "MGF1",
+                    MGF1ParameterSpec.SHA256,
+                    32,
+                    1,
+                ),
+            )
+            signature.initVerify(publicKey)
+            signature.update(payloadBytes)
+            signature.verify(signatureBytes)
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun decodeUrlBase64(value: String): ByteArray? {

@@ -185,14 +185,25 @@ import CryptoKit
       return false
     }
     var error: Unmanaged<CFError>?
-    let ok = SecKeyVerifySignature(
+    let pkcs1 = SecKeyVerifySignature(
       key,
       .rsaSignatureMessagePKCS1v15SHA256,
       payload as CFData,
       signature as CFData,
       &error
     )
-    return ok
+    if pkcs1 {
+      return true
+    }
+
+    error = nil
+    return SecKeyVerifySignature(
+      key,
+      .rsaSignatureMessagePSSSHA256,
+      payload as CFData,
+      signature as CFData,
+      &error
+    )
   }
 
   private func createSecKey(from pem: String) throws -> SecKey {
